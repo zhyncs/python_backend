@@ -797,16 +797,12 @@ ModelInstanceState::DecoupledMessageQueueMonitor()
       std::packaged_task<void()> task([this, response_send_message] {
         ResponseSendDecoupled(response_send_message);
       });
-      std::future<void> future =
-          boost::asio::post(*thread_pool_, std::move(task));
-      futures_.emplace_back(std::move(future));
+      boost::asio::post(*thread_pool_, std::move(task));
     } else if (message->Command() == PYTHONSTUB_InferExecRequest) {
       std::shared_ptr<IPCMessage> bls_execute = std::move(message);
       std::packaged_task<void()> task(
           [this, bls_execute] { ExecuteBLSRequest(bls_execute); });
-      std::future<void> future =
-          boost::asio::post(*thread_pool_, std::move(task));
-      futures_.emplace_back(std::move(future));
+      boost::asio::post(*thread_pool_, std::move(task));
     }
   }
 }
@@ -1420,11 +1416,12 @@ ModelInstanceState::~ModelInstanceState()
   Stub()->UpdateHealth();
   if (Stub()->IsHealthy()) {
     if (model_state->IsDecoupled()) {
-      futures_.clear();
+      thread_pool_->wait();
       Stub()->ParentMessageQueue()->Push(DUMMY_MESSAGE);
       decoupled_monitor_.join();
+    } else {
+      thread_pool_->wait();
     }
-    thread_pool_->wait();
   }
   // Terminate stub first to allow any last
   // messages to be received by the back end
